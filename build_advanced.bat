@@ -6,11 +6,15 @@ echo   DataSync - Advanced Portable Build
 echo ================================================
 echo.
 
+REM Set Python path
+set PYTHON="C:\Users\Joshua Faustin\AppData\Local\Programs\Python\Python313\python.exe"
+set PYINSTALLER="C:\Users\Joshua Faustin\AppData\Local\Programs\Python\Python313\Scripts\pyinstaller.exe"
+
 REM Check if PyInstaller is installed
-pip show pyinstaller >nul 2>&1
+%PYTHON% -m pip show pyinstaller >nul 2>&1
 if errorlevel 1 (
     echo PyInstaller not found. Installing...
-    pip install pyinstaller
+    %PYTHON% -m pip install pyinstaller
     echo.
 )
 
@@ -23,7 +27,7 @@ echo.
 
 REM Build GUI executable
 echo Building DataSync.exe (GUI)...
-pyinstaller --onefile ^
+%PYINSTALLER% --onefile ^
     --windowed ^
     --name DataSync ^
     --add-data "config.json;." ^
@@ -42,7 +46,7 @@ echo.
 
 REM Build sync service executable
 echo Building sync.exe (Service)...
-pyinstaller --onefile ^
+%PYINSTALLER% --onefile ^
     --name sync ^
     --add-data "config.json;." ^
     --hidden-import pyodbc ^
@@ -67,6 +71,14 @@ mkdir DataSync-Portable\logs
 REM Copy executables
 copy dist\DataSync.exe DataSync-Portable\
 copy dist\sync.exe DataSync-Portable\
+
+REM Copy Firebird client DLL if it exists
+if exist fbclient.dll (
+    echo Copying Firebird client library...
+    copy fbclient.dll DataSync-Portable\
+) else (
+    echo WARNING: fbclient.dll not found - Firebird support may not work!
+)
 
 REM Copy config and examples
 copy config.json DataSync-Portable\
