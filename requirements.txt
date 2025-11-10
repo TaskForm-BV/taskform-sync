@@ -1,5 +1,6 @@
-tkinter==8.6
-pyodbc==4.0.39
-fdb==2.0.2
-requests==2.31.0
-PyInstaller==6.1.0
+pyodbc>=4.0.39
+fdb>=2.0.2
+requests>=2.31.0
+PyInstaller>=6.1.0
+cryptography>=41.0.0
+pywin32>=306

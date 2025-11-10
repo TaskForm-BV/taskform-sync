@@ -63,38 +63,53 @@ echo.
 
 REM Create deployment package
 echo Creating deployment package...
-if exist DataSync-Portable rmdir /s /q DataSync-Portable
-mkdir DataSync-Portable
-mkdir DataSync-Portable\queries
-mkdir DataSync-Portable\logs
+if exist "TaskForm Sync" rmdir /s /q "TaskForm Sync"
+mkdir "TaskForm Sync"
+mkdir "TaskForm Sync\queries"
+mkdir "TaskForm Sync\logs"
 
 REM Copy executables
-copy dist\DataSync.exe DataSync-Portable\
-copy dist\sync.exe DataSync-Portable\
+copy dist\DataSync.exe "TaskForm Sync\"
+copy dist\sync.exe "TaskForm Sync\"
 
 REM Copy Firebird client DLL if it exists
 if exist fbclient.dll (
     echo Copying Firebird client library...
-    copy fbclient.dll DataSync-Portable\
+    copy fbclient.dll "TaskForm Sync\"
 ) else (
     echo WARNING: fbclient.dll not found - Firebird support may not work!
 )
 
-REM Copy config and examples
-copy config.json DataSync-Portable\
-copy queries\*.sql DataSync-Portable\queries\
-copy logs\.gitkeep DataSync-Portable\logs\
+REM Copy config template and examples
+copy config.json "TaskForm Sync\config.template.json"
+copy queries\*.sql "TaskForm Sync\queries\"
+copy logs\.gitkeep "TaskForm Sync\logs\"
 
 REM Copy documentation
-copy README.md DataSync-Portable\
-copy DEPLOYMENT.md DataSync-Portable\
+copy README.md "TaskForm Sync\"
+copy DEPLOYMENT.md "TaskForm Sync\"
+copy INSTALLATIE.md "TaskForm Sync\"
+copy USER_GUIDE.md "TaskForm Sync\"
+
+REM Create ZIP file for distribution
+echo.
+echo Creating ZIP file for distribution...
+if exist "TaskForm-Sync.zip" del /q "TaskForm-Sync.zip"
+powershell -Command "Compress-Archive -Path 'TaskForm Sync' -DestinationPath 'TaskForm-Sync.zip' -Force"
+
+if errorlevel 1 (
+    echo WARNING: Failed to create ZIP file
+) else (
+    echo ZIP file created: TaskForm-Sync.zip
+)
 
 echo.
 echo ================================================
 echo   Build Complete!
 echo ================================================
 echo.
-echo Portable package created in: DataSync-Portable\
+echo Portable package created in: TaskForm Sync\
+echo ZIP file created: TaskForm-Sync.zip
 echo.
 echo Contents:
 echo   - DataSync.exe (GUI)
@@ -105,8 +120,8 @@ echo   - logs\ (Log folder)
 echo   - Documentation
 echo.
 echo Next steps:
-echo   1. Test the executables in DataSync-Portable\
-echo   2. Zip the folder for distribution
+echo   1. Test the executables in "TaskForm Sync\"
+echo   2. Distribute TaskForm-Sync.zip to customers
 echo   3. Users can unzip and run without Python!
 echo.
 pause

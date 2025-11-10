@@ -7,6 +7,7 @@ from services.sqlserver_service import SQLServerService
 from services.firebird_service import FirebirdService
 from services.api_service import APIService
 from utils.logging import Logger
+from utils.transformers import auto_nest_data
 
 class SyncService:
     """Main sync service for DataSync application."""
@@ -44,11 +45,15 @@ class SyncService:
         
         # Initialize API service
         api_config = self.config.get_api_config()
+        sync_config = self.config.get_sync_config()
+        dry_run = sync_config.get("dry_run", False)
+        
         if all([api_config.get("base_url"), api_config.get("api_key"), api_config.get("tenant_id")]):
             self.api_service = APIService(
                 api_config["base_url"],
                 api_config["api_key"],
-                api_config["tenant_id"]
+                api_config["tenant_id"],
+                dry_run=dry_run
             )
             self.logger.info("API service initialized")
         else:
@@ -127,9 +132,17 @@ class SyncService:
                 self.logger.warning(f"No data returned for {table_name}")
                 return True
             
+            # Auto-nest data if query uses dot notation (e.g., lines.sku, lines.steps.name)
+            # Queries with 'parent-id' column will be automatically nested
+            nested_data = auto_nest_data(data)
+            
+            # Log transformation if nesting occurred
+            if len(nested_data) != len(data):
+                self.logger.info(f"Nested {len(data)} rows into {len(nested_data)} parent records")
+            
             # Upload to API
             if self.api_service:
-                self.api_service.bulk_upsert(table_name, data)
+                self.api_service.bulk_upsert(table_name, nested_data)
                 return True
             else:
                 self.logger.error("API service not initialized")

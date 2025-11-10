@@ -1,0 +1,21 @@
+{
+    "sql_server": {
+        "enabled": false,
+        "connection_string": ""
+    },
+    "firebird": {
+        "enabled": false,
+        "database_path": "",
+        "username": "",
+        "password": ""
+    },
+    "api": {
+        "base_url": "",
+        "api_key": "",
+        "tenant_id": ""
+    },
+    "sync": {
+        "interval_minutes": 30,
+        "queries_folder": "queries"
+    }
+}
