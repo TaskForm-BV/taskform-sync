@@ -68,13 +68,43 @@ class SyncService:
             self.logger.warning(f"Queries folder not found: {queries_folder}")
             return []
         
-        query_files = []
+        file_map = {}
         for file in os.listdir(queries_folder):
             if file.endswith(".sql"):
-                query_files.append(os.path.join(queries_folder, file))
-        
-        self.logger.info(f"Found {len(query_files)} query files")
-        return query_files
+                file_map[file] = os.path.join(queries_folder, file)
+
+        if not file_map:
+            self.logger.info("Found 0 query files")
+            return []
+
+        ordered_files: List[str] = []
+        configured_order = sync_config.get("query_order", []) if isinstance(sync_config, dict) else []
+        seen = set()
+
+        if configured_order:
+            for entry in configured_order:
+                if not isinstance(entry, str):
+                    self.logger.warning(f"Configured query name is not a string: {entry}")
+                    continue
+                file_name = entry if entry.endswith(".sql") else f"{entry}.sql"
+                if file_name in file_map:
+                    ordered_files.append(file_map[file_name])
+                    seen.add(file_name)
+                else:
+                    self.logger.warning(f"Configured query not found: {file_name}")
+
+        for file_name in sorted(file_map.keys()):
+            if file_name not in seen:
+                ordered_files.append(file_map[file_name])
+
+        self.logger.info(f"Found {len(ordered_files)} query files")
+
+        if configured_order:
+            self.logger.info("Using configured query order where applicable")
+        else:
+            self.logger.info("Using default alphabetical query order")
+
+        return ordered_files
     
     def get_table_name_from_file(self, file_path: str) -> str:
         """Extract table name from SQL file name."""

@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import os
+from typing import List
 from config import Config
 from services.sqlserver_service import SQLServerService
 from services.firebird_service import FirebirdService
@@ -43,6 +44,9 @@ class DataSyncGUI:
         self.root.title("DataSync Configuratie")
         self.root.geometry("750x700")
         self.root.resizable(True, True)
+
+        # Show window early for better perceived performance
+        self.root.update_idletasks()
 
         # Load configuration
         self.config = Config()
@@ -158,8 +162,29 @@ class DataSyncGUI:
         ToolTip(self.batch_size_spinbox, "Aantal records per API call. Standaard: 1000. Verhoog bij grote datasets, verlaag bij timeouts.")
 
         self.dry_run_var = tk.BooleanVar()
-        ttk.Checkbutton(sync_frame, text="Dry-run modus (test zonder API POST, genereert alleen JSON)", variable=self.dry_run_var).grid(row=4, column=0, columnspan=2, sticky=tk.W, pady=5)
-        ToolTip(sync_frame.winfo_children()[-1], "Haalt data op en genereert JSON, maar POST niet naar API. Handig voor testen.")
+        dry_run_checkbox = ttk.Checkbutton(sync_frame, text="Dry-run modus (test zonder API POST, genereert alleen JSON)", variable=self.dry_run_var)
+        dry_run_checkbox.grid(row=4, column=0, columnspan=2, sticky=tk.W, pady=5)
+        ToolTip(dry_run_checkbox, "Haalt data op en genereert JSON, maar POST niet naar API. Handig voor testen.")
+
+        ttk.Label(sync_frame, text="Upload volgorde (optioneel):").grid(row=5, column=0, sticky=tk.W, pady=(10, 5))
+
+        query_order_frame = ttk.Frame(sync_frame)
+        query_order_frame.grid(row=6, column=0, columnspan=2, sticky=(tk.W, tk.E))
+
+        self.query_order_listbox = tk.Listbox(query_order_frame, height=8, width=50, exportselection=False)
+        self.query_order_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        order_button_frame = ttk.Frame(query_order_frame)
+        order_button_frame.pack(side=tk.LEFT, padx=5)
+
+        ttk.Button(order_button_frame, text="Toevoegen...", command=self.add_query_to_order).pack(fill=tk.X, pady=2)
+        ttk.Button(order_button_frame, text="Verwijderen", command=self.remove_selected_query).pack(fill=tk.X, pady=2)
+        ttk.Button(order_button_frame, text="Omhoog", command=lambda: self.move_selected_query(-1)).pack(fill=tk.X, pady=2)
+        ttk.Button(order_button_frame, text="Omlaag", command=lambda: self.move_selected_query(1)).pack(fill=tk.X, pady=2)
+        ttk.Button(order_button_frame, text="Lijst opschonen", command=self.cleanup_query_order).pack(fill=tk.X, pady=2)
+
+        self.query_order_status = tk.Label(sync_frame, text="", fg="#555555")
+        self.query_order_status.grid(row=7, column=0, columnspan=2, sticky=tk.W, pady=(4, 0))
 
         # Save Button
         ttk.Button(main_frame, text="Opslaan & Sluiten", command=self.save_and_close, width=20).grid(row=row, column=0, columnspan=2, pady=20)
@@ -195,6 +220,210 @@ class DataSyncGUI:
         self.log_level_combo.set(self.config.get("sync.log_level", "INFO"))
         self.batch_size_spinbox.set(self.config.get("sync.batch_size", 1000))
         self.dry_run_var.set(self.config.get("sync.dry_run", False))
+
+        self.query_order_listbox.delete(0, tk.END)
+        configured_order = self.config.get("sync.query_order", [])
+        if isinstance(configured_order, list):
+            for item in configured_order:
+                if isinstance(item, str) and item:
+                    file_name = item if item.endswith(".sql") else f"{item}.sql"
+                    self.query_order_listbox.insert(tk.END, file_name)
+
+        self.update_query_order_status()
+
+        # Check for missing files and notify user after UI is loaded
+        if configured_order:
+            self.root.after(100, self._check_missing_queries)
+
+        # Only auto-fill on very first use (when config is completely empty)
+        # Use after_idle to avoid blocking UI startup
+        if self.query_order_listbox.size() == 0 and not configured_order:
+            self.root.after_idle(self._lazy_fill_query_order)
+
+    def get_queries_folder(self) -> str:
+        """Return normalized path to queries folder from UI."""
+        path = self.queries_path_entry.get().strip() or "queries"
+        return os.path.normpath(path)
+
+    def list_query_files(self) -> List[str]:
+        """List available .sql files in the configured queries folder."""
+        queries_folder = self.get_queries_folder()
+        if os.path.isdir(queries_folder):
+            return sorted([f for f in os.listdir(queries_folder) if f.lower().endswith(".sql")])
+        return []
+
+    def get_current_query_order(self) -> List[str]:
+        """Return current order as list of filenames with extension."""
+        return [self.query_order_listbox.get(i) for i in range(self.query_order_listbox.size())]
+
+    def update_query_order_status(self) -> None:
+        """Update helper label to show status of configured order."""
+        order = self.get_current_query_order()
+        queries_folder = self.get_queries_folder()
+
+        if not order:
+            self.query_order_status.config(text="Geen vaste volgorde ingesteld (alfabetisch).", fg="#555555")
+            return
+
+        if not os.path.isdir(queries_folder):
+            self.query_order_status.config(text="Map niet gevonden; controleer 'Queries Map'.", fg="#b35b00")
+            return
+
+        missing = [name for name in order if not os.path.exists(os.path.join(queries_folder, name))]
+
+        if missing:
+            self.query_order_status.config(
+                text=f"Ontbrekende bestanden: {', '.join(missing)}",
+                fg="#b35b00"
+            )
+        else:
+            self.query_order_status.config(
+                text=f"Volgorde actief voor {len(order)} bestanden.",
+                fg="#00843d"
+            )
+
+    def add_query_to_order(self) -> None:
+        """Add a query file from the queries folder to the order list."""
+        queries_folder = self.get_queries_folder()
+        initial_dir = queries_folder if os.path.isdir(queries_folder) else os.getcwd()
+
+        file_path = filedialog.askopenfilename(
+            title="Selecteer query bestand",
+            initialdir=initial_dir,
+            filetypes=[("SQL bestanden", "*.sql")]
+        )
+
+        if not file_path:
+            return
+
+        normalized_folder = os.path.normcase(os.path.normpath(queries_folder))
+        normalized_file = os.path.normpath(file_path)
+
+        if normalized_folder and os.path.isdir(queries_folder):
+            if os.path.normcase(os.path.dirname(normalized_file)) != normalized_folder:
+                messagebox.showerror("Fout", "Selecteer een .sql bestand uit de ingestelde queries map.")
+                return
+
+        file_name = os.path.basename(normalized_file)
+
+        if not file_name.lower().endswith(".sql"):
+            messagebox.showerror("Fout", "Selecteer een geldig .sql bestand.")
+            return
+
+        current_order = self.get_current_query_order()
+        if file_name in current_order:
+            index = current_order.index(file_name)
+            self.query_order_listbox.selection_clear(0, tk.END)
+            self.query_order_listbox.selection_set(index)
+            self.query_order_listbox.activate(index)
+        else:
+            self.query_order_listbox.insert(tk.END, file_name)
+            last_index = self.query_order_listbox.size() - 1
+            self.query_order_listbox.selection_clear(0, tk.END)
+            self.query_order_listbox.selection_set(last_index)
+            self.query_order_listbox.activate(last_index)
+
+        self.update_query_order_status()
+
+    def remove_selected_query(self) -> None:
+        """Remove the selected query from the order list."""
+        selection = self.query_order_listbox.curselection()
+        if not selection:
+            return
+
+        self.query_order_listbox.delete(selection[0])
+        self.update_query_order_status()
+
+    def move_selected_query(self, direction: int) -> None:
+        """Move selected query up or down in the list."""
+        selection = self.query_order_listbox.curselection()
+        if not selection:
+            return
+
+        index = selection[0]
+        new_index = index + direction
+
+        if new_index < 0 or new_index >= self.query_order_listbox.size():
+            return
+
+        value = self.query_order_listbox.get(index)
+        self.query_order_listbox.delete(index)
+        self.query_order_listbox.insert(new_index, value)
+        self.query_order_listbox.selection_clear(0, tk.END)
+        self.query_order_listbox.selection_set(new_index)
+        self.query_order_listbox.activate(new_index)
+        self.update_query_order_status()
+
+    def cleanup_query_order(self) -> None:
+        """Remove duplicates and files that no longer exist from the order list."""
+        current_order = self.get_current_query_order()
+        if not current_order:
+            return
+
+        seen = set()
+        queries_folder = self.get_queries_folder()
+        folder_exists = os.path.isdir(queries_folder)
+        cleaned = []
+
+        for name in current_order:
+            lower_name = name.lower()
+            if lower_name in seen:
+                continue
+            if folder_exists:
+                full_path = os.path.join(queries_folder, name)
+                if not os.path.exists(full_path):
+                    continue
+            seen.add(lower_name)
+            cleaned.append(name)
+
+        self.query_order_listbox.delete(0, tk.END)
+        for name in cleaned:
+            self.query_order_listbox.insert(tk.END, name)
+
+        self.update_query_order_status()
+
+    def fill_query_order_with_all_files(self) -> None:
+        """Populate listbox with all query files in alphabetical order."""
+        files = self.list_query_files()
+        self.query_order_listbox.delete(0, tk.END)
+        for name in files:
+            self.query_order_listbox.insert(tk.END, name)
+        self.update_query_order_status()
+
+    def _lazy_fill_query_order(self) -> None:
+        """Lazy load query files after UI is shown."""
+        queries_folder = self.get_queries_folder()
+        if os.path.isdir(queries_folder):
+            try:
+                files = self.list_query_files()
+                if len(files) > 0:
+                    self.fill_query_order_with_all_files()
+            except Exception as e:
+                print(f"Warning: Could not auto-fill query order: {e}")
+
+    def _check_missing_queries(self) -> None:
+        """Check for missing query files on startup and offer to clean them."""
+        queries_folder = self.get_queries_folder()
+        if not os.path.isdir(queries_folder):
+            return
+        
+        current_order = self.get_current_query_order()
+        if not current_order:
+            return
+        
+        missing = [name for name in current_order if not os.path.exists(os.path.join(queries_folder, name))]
+        
+        if missing:
+            msg = f"De volgende bestanden in de upload volgorde bestaan niet meer:\n\n"
+            msg += "\n".join(f"  • {name}" for name in missing[:10])  # Show max 10
+            if len(missing) > 10:
+                msg += f"\n  ... en {len(missing) - 10} meer"
+            msg += "\n\nWil je deze nu verwijderen uit de lijst?"
+            
+            response = messagebox.askyesno("Ontbrekende query bestanden", msg, icon='warning')
+            if response:
+                self.cleanup_query_order()
+                messagebox.showinfo("Gereed", f"{len(missing)} ontbrekende bestand(en) verwijderd uit de lijst.")
 
     def test_sql_server(self):
         """Test SQL Server connection."""
@@ -253,10 +482,30 @@ class DataSyncGUI:
             normalized_path = os.path.normpath(folder)
             self.queries_path_entry.delete(0, tk.END)
             self.queries_path_entry.insert(0, normalized_path)
+            self.fill_query_order_with_all_files()
 
     def save_and_close(self):
         """Save configuration and close window."""
         try:
+            # Check for missing query files and offer cleanup
+            queries_folder = self.get_queries_folder()
+            if os.path.isdir(queries_folder):
+                current_order = self.get_current_query_order()
+                missing = [name for name in current_order if not os.path.exists(os.path.join(queries_folder, name))]
+                
+                if missing:
+                    msg = f"De volgende bestanden in de volgorde lijst bestaan niet meer:\n\n"
+                    msg += "\n".join(f"  • {name}" for name in missing[:5])  # Show max 5
+                    if len(missing) > 5:
+                        msg += f"\n  ... en {len(missing) - 5} meer"
+                    msg += "\n\nWil je deze automatisch verwijderen uit de lijst?"
+                    
+                    response = messagebox.askyesnocancel("Ontbrekende bestanden", msg)
+                    if response is None:  # Cancel
+                        return
+                    elif response:  # Yes - cleanup
+                        self.cleanup_query_order()
+
             # Validate at least one database is enabled
             if not self.sql_enabled_var.get() and not self.fb_enabled_var.get():
                 messagebox.showwarning("Waarschuwing", "Schakel minimaal één database in")
@@ -289,6 +538,7 @@ class DataSyncGUI:
             self.config.set("sync.log_level", self.log_level_combo.get())
             self.config.set("sync.batch_size", int(self.batch_size_spinbox.get()))
             self.config.set("sync.dry_run", self.dry_run_var.get())
+            self.config.set("sync.query_order", self.get_current_query_order())
 
             # Save to file
             self.config.save()

@@ -56,7 +56,8 @@ class Config:
                 "queries_folder": "queries",
                 "log_level": "INFO",
                 "batch_size": 1000,
-                "dry_run": False
+                "dry_run": False,
+                "query_order": []
             }
         }
     
@@ -67,13 +68,20 @@ class Config:
                 with open(self.config_path, 'r', encoding='utf-8') as f:
                     loaded_config = json.load(f)
                     self.config.update(loaded_config)
+
+                # Ensure new sync defaults remain available for existing configs
+                if "sync" in self.config and "query_order" not in self.config["sync"]:
+                    self.config["sync"]["query_order"] = []
                     
-                # Decrypt sensitive fields
+                # Decrypt sensitive fields (lazy - only when needed)
+                # Note: Decryption happens on-demand in get() for GUI fields
+                self._decrypted_cache = {}
                 for field in self.ENCRYPTED_FIELDS:
                     encrypted_value = self.get(field, "")
                     if encrypted_value and is_encrypted(encrypted_value):
                         try:
                             decrypted_value = decrypt_string(encrypted_value)
+                            self._decrypted_cache[field] = decrypted_value
                             self.set(field, decrypted_value)
                         except Exception as e:
                             print(f"Warning: Could not decrypt {field}: {e}")

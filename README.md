@@ -56,10 +56,18 @@ python gui.py
 # Run sync
 python sync.py
 
-# Build executables
-pyinstaller --onefile gui.py --name DataSync
-pyinstaller --onefile sync.py --name sync
+# Build deployment package (recommended)
+build_advanced.bat
+
+# Or build executables only
+build_exe.bat
 ```
+
+### Build Scripts
+
+- **`build_advanced.bat`** (aanbevolen) - Complete deployment package met ZIP
+- **`build_exe.bat`** - Alleen executables bouwen
+- **`build_clean.bat`** - Deprecated, gebruik build_advanced.bat
 
 ## Project Structuur
 

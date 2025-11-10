@@ -26,32 +26,29 @@ Deze applicatie kan volledig portable worden gemaakt zodat eindgebruikers **geen
 
 ### Portable Executables Bouwen
 
-Run het build script:
+Run het **advanced build script** (aanbevolen):
+```bash
+build_advanced.bat
+```
+
+Dit script doet alles automatisch:
+- ✅ Bouwt beide executables (`DataSync.exe` en `sync.exe`)
+- ✅ Embed alle dependencies (pyodbc, fdb, requests)
+- ✅ Maakt complete deployment folder `TaskForm Sync/`
+- ✅ Kopieert Firebird client DLL
+- ✅ Voegt voorbeeldqueries en documentatie toe
+- ✅ Creëert `TaskForm-Sync.zip` voor distributie
+
+Na het runnen vind je:
+- `TaskForm Sync/` folder - Complete portable package
+- `TaskForm-Sync.zip` - Klaar voor distributie
+
+**Alternatief**: Voor alleen de executables zonder package:
 ```bash
 build_exe.bat
 ```
 
-Dit maakt twee executables in de `dist` folder:
-- `DataSync.exe` - GUI configuratie tool
-- `sync.exe` - Sync service
-
-### Deployment Package Maken
-
-1. Maak een nieuwe folder, bijvoorbeeld: `DataSync-v1.0`
-
-2. Kopieer de volgende bestanden/folders:
-   ```
-   DataSync-v1.0/
-   ├── DataSync.exe       (van dist folder)
-   ├── sync.exe           (van dist folder)
-   ├── config.json        (leeg template)
-   ├── queries/           (folder met example .sql files)
-   │   ├── customers.sql
-   │   └── products.sql
-   └── logs/              (lege folder voor log files)
-   ```
-
-3. Zip de hele folder → `DataSync-v1.0.zip`
+**Note**: `build_clean.bat` is niet meer nodig - gebruik altijd `build_advanced.bat` voor deployment.
 
 ### Gebruikers Installatie
 
