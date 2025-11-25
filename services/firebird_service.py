@@ -5,20 +5,30 @@ from utils.logging import Logger
 class FirebirdService:
     """Service for Firebird database operations."""
     
-    def __init__(self, database_path: str, username: str, password: str):
+    def __init__(self, database_path: str, username: str, password: str, charset: Optional[str] = None):
         self.database_path = database_path
         self.username = username
         self.password = password
+        self.charset = charset.strip().upper() if charset else None
         self.logger = Logger("firebird")
+
+    def _connect(self):
+        """Create a Firebird connection honoring optional charset."""
+        conn_kwargs = {
+            "dsn": self.database_path,
+            "user": self.username,
+            "password": self.password
+        }
+        if self.charset:
+            conn_kwargs["charset"] = self.charset
+        else:
+            conn_kwargs["charset"] = "UTF8"  # match legacy default
+        return fdb.connect(**conn_kwargs)
     
     def test_connection(self) -> bool:
         """Test Firebird connection."""
         try:
-            conn = fdb.connect(
-                dsn=self.database_path,
-                user=self.username,
-                password=self.password
-            )
+            conn = self._connect()
             conn.close()
             self.logger.success("Firebird connection successful")
             return True
@@ -31,12 +41,12 @@ class FirebirdService:
         try:
             self.logger.info(f"Executing Firebird query")
             
-            conn = fdb.connect(
-                dsn=self.database_path,
-                user=self.username,
-                password=self.password
-            )
+            conn = self._connect()
             cursor = conn.cursor()
+            
+            # Encode SQL string to bytes for fdb
+            if isinstance(sql, str):
+                sql = sql.encode('utf-8')
             
             cursor.execute(sql)
             
@@ -61,7 +71,8 @@ class FirebirdService:
     def execute_query_from_file(self, file_path: str) -> List[Dict[str, Any]]:
         """Execute SQL query from file."""
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            # Read file with UTF-8-SIG to automatically remove BOM if present
+            with open(file_path, 'r', encoding='utf-8-sig') as f:
                 sql = f.read()
             
             self.logger.info(f"Executing query from file: {file_path}")

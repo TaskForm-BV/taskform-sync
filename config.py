@@ -45,7 +45,8 @@ class Config:
                 "enabled": False,
                 "database_path": "",
                 "username": "",
-                "password": ""
+                "password": "",
+                "charset": ""
             },
             "api": {
                 "base_url": "",

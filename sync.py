@@ -39,7 +39,8 @@ class SyncService:
                 self.fb_service = FirebirdService(
                     fb_config["database_path"],
                     fb_config["username"],
-                    fb_config["password"]
+                    fb_config["password"],
+                    charset=fb_config.get("charset")
                 )
                 self.logger.info("Firebird service initialized")
         
@@ -47,15 +48,17 @@ class SyncService:
         api_config = self.config.get_api_config()
         sync_config = self.config.get_sync_config()
         dry_run = sync_config.get("dry_run", False)
+        batch_size = sync_config.get("batch_size", 500)  # Default 500 records per batch
         
         if all([api_config.get("base_url"), api_config.get("api_key"), api_config.get("tenant_id")]):
             self.api_service = APIService(
                 api_config["base_url"],
                 api_config["api_key"],
                 api_config["tenant_id"],
-                dry_run=dry_run
+                dry_run=dry_run,
+                batch_size=batch_size
             )
-            self.logger.info("API service initialized")
+            self.logger.info(f"API service initialized (batch_size: {batch_size})")
         else:
             raise Exception("API configuration is incomplete")
     
